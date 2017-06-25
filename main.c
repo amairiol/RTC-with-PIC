@@ -59,19 +59,16 @@ void main(){
     DS1302_CLOCK_DATA[2] = hour;
     //at the first time set the time and upload the code
     //after you do this comment the following line and upload again
-    //DS1302_CLOCK_WRITE();
+    DS1302_CLOCK_WRITE();
 
     DS1302_CLOCK_READ();
     while(1)
     {
        if(READ_ENABLE){ DS1302_CLOCK_READ(); READ_ENABLE = 0; }
-
        second = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[0]);
        minute = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[1]);
        (BUTTON) ? write_segments(minute) : write_segments(second);
-
     }
-
 }
 
 
