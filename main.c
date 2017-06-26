@@ -10,7 +10,7 @@
 #define DS1302_IO_TRIS    TRISB.F6
 #define DS1302_SCLK_TRIS   TRISB.F5
 
-#define DS1302_RST_DATA    PORTB.F7 // Modify these code to fix your IO lines
+#define DS1302_RST_DATA    PORTB.F7
 #define DS1302_IO_DATA     PORTB.F6
 #define DS1302_SCLK_DATA   PORTB.F5
 
@@ -27,7 +27,11 @@ void init_timer0();
 void init_timer1();
 void interrupt();
 unsigned char DS1302_format_to_min_or_sec(unsigned char x);
+unsigned char min_or_sec_to_DS1302_format(unsigned char y);
+unsigned char hour_to_DS1302_format(unsigned char z);
+unsigned char DS1302_format_to_hour(unsigned char v);
 void write_segments(unsigned char time);
+void init_time (unsigned char sec, unsigned char min, unsigned char hour, unsigned char CH_FLAG);
 
 unsigned char second, minute, hour;
 unsigned int scaler;
@@ -54,25 +58,23 @@ void main(){
     init_timer0();
     init_timer1();
     init_interrupts();
-    DS1302_CLOCK_DATA[0] = second;
-    DS1302_CLOCK_DATA[1] = minute;
-    DS1302_CLOCK_DATA[2] = hour;
     //at the first time set the time and upload the code
     //after you do this comment the following line and upload again
-    DS1302_CLOCK_WRITE();
-
+    //init_time(45,59,9,0);                                                            //parameters: (second, minute, hour, CH_FLAG)
     DS1302_CLOCK_READ();
     while(1)
     {
        if(READ_ENABLE){ DS1302_CLOCK_READ(); READ_ENABLE = 0; }
        second = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[0]);
        minute = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[1]);
+       hour = DS1302_format_to_hour(DS1302_CLOCK_DATA[2]);
        (BUTTON) ? write_segments(minute) : write_segments(second);
     }
 }
 
 
-void DS1302_INIT(){
+void DS1302_INIT()
+{
      DS1302_RST_TRIS = 0; // Define this pin as output
      DS1302_IO_TRIS = 1;  // Define this pin as input for the start, need to change when Write
      DS1302_SCLK_TRIS = 0; // Define this pin as output
@@ -84,7 +86,8 @@ void DS1302_INIT(){
 //------------------------------------------------------------------------------
 // Read all clock data sec, min, hour.......etc into array
 //------------------------------------------------------------------------------
-void DS1302_CLOCK_READ(){
+void DS1302_CLOCK_READ()
+{
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -130,7 +133,8 @@ void DS1302_CLOCK_READ(){
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_CLOCK_WRITE(){
+void DS1302_CLOCK_WRITE()
+{
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -173,7 +177,8 @@ void DS1302_CLOCK_WRITE(){
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_RAM_READ(){
+void DS1302_RAM_READ()
+{
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -220,7 +225,8 @@ void DS1302_RAM_READ(){
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_RAM_WRITE(){
+void DS1302_RAM_WRITE()
+{
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -261,6 +267,7 @@ void DS1302_RAM_WRITE(){
      DS1302_IO_DATA = 0;  // Change IO line to input
      DS1302_RST_DATA = 0; // Hold reset line, internal clock still running
 }
+
 void init_interrupts()
 {
 // Interrupt Registers
@@ -299,6 +306,7 @@ TMR1H = 11;             // preset for timer1 MSB register
 TMR1L = 220;             // preset for timer1 LSB register
 
 }
+
 void interrupt()
 {
   if (INTCON.TMR0IF ==1) // timer 0 interrupt flag
@@ -322,7 +330,8 @@ void interrupt()
 
 }
 
- unsigned char DS1302_format_to_min_or_sec(unsigned char x){
+unsigned char DS1302_format_to_min_or_sec(unsigned char x)
+{
      unsigned char ten,ind, ret;
      ten = x.F6*4+x.F5*2+x.F4;
      ind = x.F3*8+x.F2*4+x.F1*2+x.F0;
@@ -330,7 +339,39 @@ void interrupt()
      return ret;
 }
 
-void write_segments(unsigned char time){
+unsigned char min_or_sec_to_DS1302_format(unsigned char y)
+{
+     unsigned char ret;
+     switch(y/10)
+     {
+         case 0: ret.F6 = 0; ret.F5 = 0; ret.F4 = 0; break;
+         case 1: ret.F6 = 0; ret.F5 = 0; ret.F4 = 1; break;
+         case 2: ret.F6 = 0; ret.F5 = 1; ret.F4 = 0; break;
+         case 3: ret.F6 = 0; ret.F5 = 1; ret.F4 = 1; break;
+         case 4: ret.F6 = 1; ret.F5 = 0; ret.F4 = 0; break;
+         case 5: ret.F6 = 1; ret.F5 = 0; ret.F4 = 1; break;
+         default : ret.F6 = 0; ret.F5 = 0; ret.F4 = 0; break;
+     }
+     switch(y%10)
+     {
+         case 0: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+         case 1: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 1; break;
+         case 2: ret.F3 = 0; ret.F2 = 0; ret.F1 = 1; ret.F0 = 0; break;
+         case 3: ret.F3 = 0; ret.F2 = 0; ret.F1 = 1; ret.F0 = 1; break;
+         case 4: ret.F3 = 0; ret.F2 = 1; ret.F1 = 0; ret.F0 = 0; break;
+         case 5: ret.F3 = 0; ret.F2 = 1; ret.F1 = 0; ret.F0 = 1; break;
+         case 6: ret.F3 = 0; ret.F2 = 1; ret.F1 = 1; ret.F0 = 0; break;
+         case 7: ret.F3 = 0; ret.F2 = 1; ret.F1 = 1; ret.F0 = 1; break;
+         case 8: ret.F3 = 1; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+         case 9: ret.F3 = 1; ret.F2 = 0; ret.F1 = 0; ret.F0 = 1; break;
+         default: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+     }
+     return ret;
+     
+}
+
+void write_segments(unsigned char time)
+{
       switch(segments)
        {
            case 0:
@@ -370,6 +411,53 @@ void write_segments(unsigned char time){
            case 2: PORTC = 0x20; break;                                             //enable third segment
            case 3: PORTC = 0x10; break;                                             //enable fourth segment
        }
+}
+
+unsigned char hour_to_DS1302_format(unsigned char z)
+{ 
+     unsigned char ret;
+     ret.F7 = 0;                     //set 24 hour format
+     ret.F6 = 0;
+
+     switch(z/10)
+     {
+        case 0: ret.F5 = 0; ret.F4 = 0; break;
+        case 1: ret.F5 = 0; ret.F4 = 1; break;
+        case 2: ret.F5 = 1; ret.F4 = 0; break;
+     }
+     switch(z%10)
+     {
+         case 0: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+         case 1: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 1; break;
+         case 2: ret.F3 = 0; ret.F2 = 0; ret.F1 = 1; ret.F0 = 0; break;
+         case 3: ret.F3 = 0; ret.F2 = 0; ret.F1 = 1; ret.F0 = 1; break;
+         case 4: ret.F3 = 0; ret.F2 = 1; ret.F1 = 0; ret.F0 = 0; break;
+         case 5: ret.F3 = 0; ret.F2 = 1; ret.F1 = 0; ret.F0 = 1; break;
+         case 6: ret.F3 = 0; ret.F2 = 1; ret.F1 = 1; ret.F0 = 0; break;
+         case 7: ret.F3 = 0; ret.F2 = 1; ret.F1 = 1; ret.F0 = 1; break;
+         case 8: ret.F3 = 1; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+         case 9: ret.F3 = 1; ret.F2 = 0; ret.F1 = 0; ret.F0 = 1; break;
+         default: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
+     }
+     return ret;
+}
+
+unsigned char DS1302_format_to_hour(unsigned char v)
+{   
+     unsigned char ret, ten, ind;
+     ten = v.F5*2 + v.F4;
+     ind = v.F3*8 + v.F2*4 + v.F1*2 + v.F0;
+     ret = ten*10+ind;
+     return ret;
+}
+
+void init_time (unsigned char sec, unsigned char min, unsigned char hour, unsigned char CH_FLAG)
+{
+    DS1302_CLOCK_DATA[0] = min_or_sec_to_DS1302_format(sec);
+    DS1302_CLOCK_DATA[1] = min_or_sec_to_DS1302_format(min);
+    DS1302_CLOCK_DATA[2] = hour_to_DS1302_format(hour);
+    DS1302_CLOCK_DATA[0].F7 = CH_FLAG;
+    DS1302_CLOCK_WRITE();
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
