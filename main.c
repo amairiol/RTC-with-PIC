@@ -14,14 +14,33 @@
 #define DS1302_IO_DATA     PORTB.F6
 #define DS1302_SCLK_DATA   PORTB.F5
 
-#define BUTTON PORTB.F0
+//define segment's IO ports
+#define DIGIT1 PORTC.F7
+#define DIGIT2 PORTC.F6
+#define DIGIT3 PORTC.F5
+#define DIGIT4 PORTC.F4
 
+
+//define matrix IO lines
+#define X1 PORTB.F1
+#define X2 PORTB.F2
+#define X3 PORTB.F3
+#define X4 PORTB.F4
+#define X5 PORTA.F2
+#define X6 PORTA.F1
+
+#define HC4017_CLK PORTC.F2
+#define HC4017_RESET PORTC.F3
+
+//define inputs
+#define BUTTON PORTB.F0
 
 void DS1302_INIT();
 void DS1302_CLOCK_READ();
 void DS1302_CLOCK_WRITE();
 void DS1302_RAM_READ();
 void DS1302_RAM_WRITE();
+void HC4017_INIT();
 void init_interrupts();
 void init_timer0();
 void init_timer1();
@@ -30,12 +49,14 @@ unsigned char DS1302_format_to_min_or_sec(unsigned char x);
 unsigned char min_or_sec_to_DS1302_format(unsigned char y);
 unsigned char hour_to_DS1302_format(unsigned char z);
 unsigned char DS1302_format_to_hour(unsigned char v);
-void write_segments(unsigned char time);
+void write_time();
+void write_sec();
 void init_time (unsigned char sec, unsigned char min, unsigned char hour, unsigned char CH_FLAG);
 
 unsigned char second, minute, hour;
 unsigned int scaler;
 char segments;
+char second_segments;
 unsigned char READ_ENABLE;
 unsigned char command;
 unsigned char DS1302_CLOCK_DATA[8];
@@ -43,24 +64,31 @@ unsigned char DS1302_RAM_DATA[31];
 
 
 void main(){
-    TRISC = 0x00;                                                                   //port C.F0...F4 --> enable segments F5...F7 --> DS1302 controll bits
-    TRISB = 0x01;                                                                   //port B.F0 --> Push button
-    TRISD = 0x00;                                                                   //port D = output number
+    TRISA = 0x00;
+    TRISB = 0x01;
+    TRISC = 0x00;
+    TRISD = 0x00;
+   
+    PORTA = 0x00;                                                                   //port D = output number
     PORTB = 0x00;
+    PORTC = 0x00;
     PORTD = 0x00;
+   
     second = 0;
     minute = 0;
     hour = 0;
     scaler = 0;
     READ_ENABLE = 0;
     segments = 0;
+    second_segments = 0;
     DS1302_INIT();
+    HC4017_INIT();
     init_timer0();
     init_timer1();
     init_interrupts();
     //at the first time set the time and upload the code
     //after you do this comment the following line and upload again
-    //init_time(45,59,9,0);                                                            //parameters: (second, minute, hour, CH_FLAG)
+    //init_time(00,47,20,0);                                                            //parameters: (second, minute, hour, CH_FLAG)
     DS1302_CLOCK_READ();
     while(1)
     {
@@ -68,13 +96,13 @@ void main(){
        second = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[0]);
        minute = DS1302_format_to_min_or_sec(DS1302_CLOCK_DATA[1]);
        hour = DS1302_format_to_hour(DS1302_CLOCK_DATA[2]);
-       (BUTTON) ? write_segments(minute) : write_segments(second);
+       write_sec();
+       write_time();
     }
 }
 
 
-void DS1302_INIT()
-{
+void DS1302_INIT(){
      DS1302_RST_TRIS = 0; // Define this pin as output
      DS1302_IO_TRIS = 1;  // Define this pin as input for the start, need to change when Write
      DS1302_SCLK_TRIS = 0; // Define this pin as output
@@ -86,8 +114,7 @@ void DS1302_INIT()
 //------------------------------------------------------------------------------
 // Read all clock data sec, min, hour.......etc into array
 //------------------------------------------------------------------------------
-void DS1302_CLOCK_READ()
-{
+void DS1302_CLOCK_READ(){
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -133,8 +160,7 @@ void DS1302_CLOCK_READ()
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_CLOCK_WRITE()
-{
+void DS1302_CLOCK_WRITE(){
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -177,8 +203,7 @@ void DS1302_CLOCK_WRITE()
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_RAM_READ()
-{
+void DS1302_RAM_READ(){
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -225,8 +250,7 @@ void DS1302_RAM_READ()
 }
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-void DS1302_RAM_WRITE()
-{
+void DS1302_RAM_WRITE(){
      unsigned char cc1,cc2,dat;     // cc1 and cc2 are used for counter
 
      DS1302_IO_TRIS = 0;  // Change IO line to output
@@ -268,6 +292,15 @@ void DS1302_RAM_WRITE()
      DS1302_RST_DATA = 0; // Hold reset line, internal clock still running
 }
 
+void HC4017_INIT()
+{
+   HC4017_CLK = 0;
+   delay_us(1);
+   HC4017_RESET = 1;
+   delay_us(1);
+   HC4017_RESET = 0;
+   delay_us(1);
+}
 void init_interrupts()
 {
 // Interrupt Registers
@@ -312,6 +345,12 @@ void interrupt()
   if (INTCON.TMR0IF ==1) // timer 0 interrupt flag
   {
     (segments==4)? segments = 0 : segments++;
+    HC4017_CLK = ~HC4017_CLK;
+    if(HC4017_CLK)
+       if(second_segments != 9)
+          second_segments++;
+       else
+          second_segments = 0;
     INTCON.TMR0IF = 0;         // clear the flag
     INTCON.TMR0IE = 1;         // reenable the interrupt
     TMR0 = 6;           // reset the timer preset count
@@ -367,15 +406,15 @@ unsigned char min_or_sec_to_DS1302_format(unsigned char y)
          default: ret.F3 = 0; ret.F2 = 0; ret.F1 = 0; ret.F0 = 0; break;
      }
      return ret;
-     
+
 }
 
-void write_segments(unsigned char time)
+void write_time()
 {
       switch(segments)
        {
            case 0:
-           switch(time%10)                                                        //decode the number
+           switch(minute%10)                                                        //decode the number
             {
               case 0: PORTD = 0xC0; break;
               case 1: PORTD = 0xF9; break;
@@ -388,11 +427,15 @@ void write_segments(unsigned char time)
               case 8: PORTD = 0x80; break;
               case 9: PORTD = 0x90; break;
             }
-            PORTC = 0x80;                                                           //enable first segment
+            //enable first segment
+            DIGIT1 = 1;
+            DIGIT2 = 0;
+            DIGIT3 = 0;
+            DIGIT4 = 0;
             break;
 
            case 1:
-             switch(time/10)                                                      //decode the number
+             switch(minute/10)                                                      //decode the number
               {
                 case 0: PORTD = 0xC0; break;
                 case 1: PORTD = 0xF9; break;
@@ -405,16 +448,59 @@ void write_segments(unsigned char time)
                 case 8: PORTD = 0x80; break;
                 case 9: PORTD = 0x90; break;
               }
-             PORTC = 0x40;                                                           //enable second segment
+             //enable second segment
+            DIGIT1 = 0;
+            DIGIT2 = 1;
+            DIGIT3 = 0;
+            DIGIT4 = 0;
                 break;
 
-           case 2: PORTC = 0x20; break;                                             //enable third segment
-           case 3: PORTC = 0x10; break;                                             //enable fourth segment
+           case 2:
+             switch(hour%10)                                                      //decode the number
+              {
+                case 0: PORTD = 0xC0; break;
+                case 1: PORTD = 0xF9; break;
+                case 2: PORTD = 0xA4; break;
+                case 3: PORTD = 0xB0; break;
+                case 4: PORTD = 0x99; break;
+                case 5: PORTD = 0x92; break;
+                case 6: PORTD = 0x82; break;
+                case 7: PORTD = 0xF8; break;
+                case 8: PORTD = 0x80; break;
+                case 9: PORTD = 0x90; break;
+              }
+
+            //enable third segment
+            DIGIT1 = 0;
+            DIGIT2 = 0;
+            DIGIT3 = 1;
+            DIGIT4 = 0;
+            break;
+           case 3:
+             switch(hour/10)                                                      //decode the number
+              {
+                case 0: PORTD = 0xC0; break;
+                case 1: PORTD = 0xF9; break;
+                case 2: PORTD = 0xA4; break;
+                case 3: PORTD = 0xB0; break;
+                case 4: PORTD = 0x99; break;
+                case 5: PORTD = 0x92; break;
+                case 6: PORTD = 0x82; break;
+                case 7: PORTD = 0xF8; break;
+                case 8: PORTD = 0x80; break;
+                case 9: PORTD = 0x90; break;
+              }
+              //enable fourth segment
+            DIGIT1 = 0;
+            DIGIT2 = 0;
+            DIGIT3 = 0;
+            DIGIT4 = 1;
+              break;
        }
 }
 
 unsigned char hour_to_DS1302_format(unsigned char z)
-{ 
+{
      unsigned char ret;
      ret.F7 = 0;                     //set 24 hour format
      ret.F6 = 0;
@@ -443,7 +529,7 @@ unsigned char hour_to_DS1302_format(unsigned char z)
 }
 
 unsigned char DS1302_format_to_hour(unsigned char v)
-{   
+{
      unsigned char ret, ten, ind;
      ten = v.F5*2 + v.F4;
      ind = v.F3*8 + v.F2*4 + v.F1*2 + v.F0;
@@ -451,6 +537,22 @@ unsigned char DS1302_format_to_hour(unsigned char v)
      return ret;
 }
 
+void write_sec()
+{
+    unsigned char s;
+    s = second%6;
+    switch(s)
+    {
+       case 0: X1 = 1; X2 = 0; X3 = 0; X4 = 0; X5 = 0; X6 = 0; break;
+       case 1: X1 = 1; X2 = 1; X3 = 0; X4 = 0; X5 = 0; X6 = 0; break;
+       case 2: X1 = 1; X2 = 1; X3 = 1; X4 = 0; X5 = 0; X6 = 0; break;
+       case 3: X1 = 1; X2 = 1; X3 = 1; X4 = 1; X5 = 0; X6 = 0; break;
+       case 4: X1 = 1; X2 = 1; X3 = 1; X4 = 1; X5 = 1; X6 = 0; break;
+       case 5: X1 = 1; X2 = 1; X3 = 1; X4 = 1; X5 = 1; X6 = 1; break;
+       default: X1 = 0; X2 = 1; X3 = 0; X4 = 1; X5 = 0; X6 = 1; break;
+    }
+    
+}
 void init_time (unsigned char sec, unsigned char min, unsigned char hour, unsigned char CH_FLAG)
 {
     DS1302_CLOCK_DATA[0] = min_or_sec_to_DS1302_format(sec);
